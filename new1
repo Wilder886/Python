@@ -1,0 +1,88 @@
+import csv
+import json
+import copy
+import numpy as np
+import pandas as pd
+import os
+from StaticEplusEngine import run_eplus_model, convert_json_idf
+
+
+class parametric_simulation_object :
+
+    def __init__(self,eplus_run_path,idf_path,epjson_path,output_dir,
+                              parameter_key, parameter_vals):
+
+        self.eplus_run_path = eplus_run_path
+        self.idf_idf_path = idf_path
+        self.epjson_path = epjson_path
+        self.output_dir = output_dir
+        self.parameter_key = parameter_key
+        self.parameter_vals = parameter_vals
+
+    @property
+    def run_one_simulation(self,eplus_run_path,idf_path,epjson_path,output_dir,
+                              parameter_key, parameter_vals):
+
+         #将json文件转换为idf文件，进行模拟
+        convert_json_idf(eplus_run_path, idf_path)
+
+        #定义epjson_path 创建epjson文件路径 [0]是用来控制位置的
+        epjson_path = idf_path.split('.idf')[0] + '.epJSON'
+
+        #json.load() 读取所有内容并返回为dict对象
+        #得到了一个 epjson_json 的字典
+        with open(epjson_path) as epJSON:
+            epjson_dict = json.load(epJSON)
+        inner_dict = epjson_dict
+         #循环判断字符串长度
+        for i in range(len(parameter_key)):
+            if i < len(parameter_key) - 1:
+                inner_dict = inner_dict[parameter_key[i]]
+        inner_dict[parameter_key[-1]] = parameter_vals
+
+        with open(epjson_path, 'w') as epjson:
+            json.dump(epjson_dict, epjson)
+
+        convert_json_idf(eplus_run_path, epjson_path)
+
+        run_eplus_model(eplus_run_path, idf_path, output_dir)
+
+        return output_dir + '/eplusout.csv'
+
+
+    @property
+    # 1.遍历所有csv结果 2.比较找到最大数值 3.求平均值
+    def FindOptimalValue(self,parameter_vals,output_dir,output_paths,parameter_key):
+
+        for parameter_key in output_paths.keys():
+            this_path = output_paths[parameter_key]
+            this_df = pd.read_csv(this_path)
+
+
+            this_sumcol = this_df[this_path].sum()
+            this_list=[]
+            this_optiaml_list=[]
+            for i in this_sumcol:
+                this_list.append(this_sumcol[i])
+
+                this_max=max(this_list)
+                this_optiaml= this_max / len(parameter_vals)
+                this_optiaml_list.append(this_optiaml)
+
+
+        with open(output_dir+'output.csv','w',encoding='UTF-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Parameter','Optimal Value'])
+            writer.writerow([parameter_key,this_optiaml])
+
+
+
+
+
+
+
+
+
+
+
+
